@@ -94,18 +94,18 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     /* Peripheral clock enable */
     __HAL_RCC_SPI1_CLK_ENABLE();
 
-    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
     /**SPI1 GPIO Configuration
-    PB3     ------> SPI1_SCK
-    PB4     ------> SPI1_MISO
-    PB5     ------> SPI1_MOSI
+    PA5     ------> SPI1_SCK
+    PA6     ------> SPI1_MISO
+    PA7     ------> SPI1_MOSI
     */
-    GPIO_InitStruct.Pin = BAR_SCK_Pin|BAR_MISO_Pin|BAR_MOSI_Pin;
+    GPIO_InitStruct.Pin = IMU_SCK_Pin|IMU_MISO_Pin|IMU_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USER CODE BEGIN SPI1_MspInit 1 */
 
@@ -120,25 +120,17 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     __HAL_RCC_SPI2_CLK_ENABLE();
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
     /**SPI2 GPIO Configuration
     PC2     ------> SPI2_MISO
     PC3     ------> SPI2_MOSI
-    PB10     ------> SPI2_SCK
+    PC7     ------> SPI2_SCK
     */
-    GPIO_InitStruct.Pin = MAG_MISO_Pin|MAG_MOSI_Pin;
+    GPIO_InitStruct.Pin = BAR_MISO_Pin|BAR_MOSI_Pin|BAR_SCK_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = MAG_SCK_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
-    HAL_GPIO_Init(MAG_SCK_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN SPI2_MspInit 1 */
 
@@ -158,7 +150,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     PC11     ------> SPI3_MISO
     PC12     ------> SPI3_MOSI
     */
-    GPIO_InitStruct.Pin = FLASH_SCK_Pin|FLASH_MISO_Pin|FLASH_MOSI_Pin;
+    GPIO_InitStruct.Pin = MAG_FLASH_SCK_Pin|MAG_FLASH_MISO_Pin|MAG_FLASH_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -168,39 +160,6 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
   /* USER CODE BEGIN SPI3_MspInit 1 */
 
   /* USER CODE END SPI3_MspInit 1 */
-  }
-  else if(hspi->Instance==SPI5)
-  {
-  /* USER CODE BEGIN SPI5_MspInit 0 */
-
-  /* USER CODE END SPI5_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_SPI5_CLK_ENABLE();
-
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**SPI5 GPIO Configuration
-    PB0     ------> SPI5_SCK
-    PA10     ------> SPI5_MOSI
-    PA12     ------> SPI5_MISO
-    */
-    GPIO_InitStruct.Pin = IMU_SCK_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF6_SPI5;
-    HAL_GPIO_Init(IMU_SCK_GPIO_Port, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = IMU_MOSI_Pin|IMU_MISO_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF6_SPI5;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN SPI5_MspInit 1 */
-
-  /* USER CODE END SPI5_MspInit 1 */
   }
 
 }
@@ -222,11 +181,11 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     __HAL_RCC_SPI1_CLK_DISABLE();
 
     /**SPI1 GPIO Configuration
-    PB3     ------> SPI1_SCK
-    PB4     ------> SPI1_MISO
-    PB5     ------> SPI1_MOSI
+    PA5     ------> SPI1_SCK
+    PA6     ------> SPI1_MISO
+    PA7     ------> SPI1_MOSI
     */
-    HAL_GPIO_DeInit(GPIOB, BAR_SCK_Pin|BAR_MISO_Pin|BAR_MOSI_Pin);
+    HAL_GPIO_DeInit(GPIOA, IMU_SCK_Pin|IMU_MISO_Pin|IMU_MOSI_Pin);
 
   /* USER CODE BEGIN SPI1_MspDeInit 1 */
 
@@ -243,11 +202,9 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     /**SPI2 GPIO Configuration
     PC2     ------> SPI2_MISO
     PC3     ------> SPI2_MOSI
-    PB10     ------> SPI2_SCK
+    PC7     ------> SPI2_SCK
     */
-    HAL_GPIO_DeInit(GPIOC, MAG_MISO_Pin|MAG_MOSI_Pin);
-
-    HAL_GPIO_DeInit(MAG_SCK_GPIO_Port, MAG_SCK_Pin);
+    HAL_GPIO_DeInit(GPIOC, BAR_MISO_Pin|BAR_MOSI_Pin|BAR_SCK_Pin);
 
   /* USER CODE BEGIN SPI2_MspDeInit 1 */
 
@@ -266,32 +223,77 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     PC11     ------> SPI3_MISO
     PC12     ------> SPI3_MOSI
     */
-    HAL_GPIO_DeInit(GPIOC, FLASH_SCK_Pin|FLASH_MISO_Pin|FLASH_MOSI_Pin);
+    HAL_GPIO_DeInit(GPIOC, MAG_FLASH_SCK_Pin|MAG_FLASH_MISO_Pin|MAG_FLASH_MOSI_Pin);
 
   /* USER CODE BEGIN SPI3_MspDeInit 1 */
 
   /* USER CODE END SPI3_MspDeInit 1 */
   }
-  else if(hspi->Instance==SPI5)
+
+}
+
+/**
+* @brief PCD MSP Initialization
+* This function configures the hardware resources used in this example
+* @param hpcd: PCD handle pointer
+* @retval None
+*/
+void HAL_PCD_MspInit(PCD_HandleTypeDef* hpcd)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  if(hpcd->Instance==USB_OTG_FS)
   {
-  /* USER CODE BEGIN SPI5_MspDeInit 0 */
+  /* USER CODE BEGIN USB_OTG_FS_MspInit 0 */
 
-  /* USER CODE END SPI5_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_SPI5_CLK_DISABLE();
+  /* USER CODE END USB_OTG_FS_MspInit 0 */
 
-    /**SPI5 GPIO Configuration
-    PB0     ------> SPI5_SCK
-    PA10     ------> SPI5_MOSI
-    PA12     ------> SPI5_MISO
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    /**USB_OTG_FS GPIO Configuration
+    PA11     ------> USB_OTG_FS_DM
+    PA12     ------> USB_OTG_FS_DP
     */
-    HAL_GPIO_DeInit(IMU_SCK_GPIO_Port, IMU_SCK_Pin);
+    GPIO_InitStruct.Pin = USB_N_Pin|USB_P_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    HAL_GPIO_DeInit(GPIOA, IMU_MOSI_Pin|IMU_MISO_Pin);
+    /* Peripheral clock enable */
+    __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+  /* USER CODE BEGIN USB_OTG_FS_MspInit 1 */
 
-  /* USER CODE BEGIN SPI5_MspDeInit 1 */
+  /* USER CODE END USB_OTG_FS_MspInit 1 */
 
-  /* USER CODE END SPI5_MspDeInit 1 */
+  }
+
+}
+
+/**
+* @brief PCD MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param hpcd: PCD handle pointer
+* @retval None
+*/
+void HAL_PCD_MspDeInit(PCD_HandleTypeDef* hpcd)
+{
+  if(hpcd->Instance==USB_OTG_FS)
+  {
+  /* USER CODE BEGIN USB_OTG_FS_MspDeInit 0 */
+
+  /* USER CODE END USB_OTG_FS_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_USB_OTG_FS_CLK_DISABLE();
+
+    /**USB_OTG_FS GPIO Configuration
+    PA11     ------> USB_OTG_FS_DM
+    PA12     ------> USB_OTG_FS_DP
+    */
+    HAL_GPIO_DeInit(GPIOA, USB_N_Pin|USB_P_Pin);
+
+  /* USER CODE BEGIN USB_OTG_FS_MspDeInit 1 */
+
+  /* USER CODE END USB_OTG_FS_MspDeInit 1 */
   }
 
 }
