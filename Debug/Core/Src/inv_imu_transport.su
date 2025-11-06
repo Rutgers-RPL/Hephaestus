@@ -1,0 +1,9 @@
+../Core/Src/inv_imu_transport.c:32:5:inv_imu_read_reg	32	static
+../Core/Src/inv_imu_transport.c:41:5:inv_imu_write_reg	32	static
+../Core/Src/inv_imu_transport.c:50:5:inv_imu_read_sram	32	static
+../Core/Src/inv_imu_transport.c:56:5:inv_imu_write_sram	32	static
+../Core/Src/inv_imu_transport.c:66:12:read_dreg	24	static
+../Core/Src/inv_imu_transport.c:74:12:write_dreg	24	static
+../Core/Src/inv_imu_transport.c:82:12:check_out_of_bounds_mreg	24	static
+../Core/Src/inv_imu_transport.c:108:12:read_mreg	40	static
+../Core/Src/inv_imu_transport.c:135:12:write_mreg	40	static

@@ -1,0 +1,3 @@
+../Core/Src/imu_board.c:15:5:stm32_write_reg	1
+../Core/Src/imu_board.c:24:5:stm32_read_reg	1
+../Core/Src/imu_board.c:34:6:stm32_sleep_us	2

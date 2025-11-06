@@ -21,6 +21,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "inv_imu_driver.h"
+#include "inv_imu_transport.h"
+#include "imu_board.h"
+#include "inv_imu.h"
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -83,6 +88,8 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
   /* USER CODE END Init */
 
@@ -100,13 +107,48 @@ int main(void)
   MX_SPI3_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t buffer[128];
+  //uint8_t buffer[128];
+  printf("Starting IMU communication test (ICM-45686)...\n");
+
+  // Create IMU device instance
+  inv_imu_device_t imu_dev;
+  memset(&imu_dev, 0, sizeof(inv_imu_device_t));
+
+  // Hook up SPI transport functions
+  imu_dev.transport.read_reg  = stm32_read_reg;
+  imu_dev.transport.write_reg = stm32_write_reg;
+  imu_dev.transport.sleep_us  = stm32_sleep_us;
+  imu_dev.transport.serif_type = UI_SPI4;  // SPI interface
+  // Reset the device (optional but recommended)
+  inv_imu_soft_reset(&imu_dev);
+
+  // Wait a little after reset
+  HAL_Delay(100);
+
+  // Read WHO_AM_I register
+  uint8_t who_am_i = 0;
+  int status = inv_imu_get_who_am_i(&imu_dev, &who_am_i);
+  if (status != INV_IMU_OK) {
+      printf("Failed to read WHO_AM_I\n");
+      Error_Handler();
+  }
+
+  printf("WHO_AM_I = 0x%02X\n", who_am_i);
+
+  // The correct ID for ICM-45686 is 0xE9 (verify in your datasheet)
+  if (who_am_i == 0xE9) {
+      printf("✅ IMU detected correctly!\n");
+  } else {
+      printf("⚠️ Unexpected WHO_AM_I value: 0x%02X\n", who_am_i);
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	  HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

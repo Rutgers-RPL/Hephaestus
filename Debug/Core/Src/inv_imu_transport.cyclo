@@ -1,0 +1,9 @@
+../Core/Src/inv_imu_transport.c:32:5:inv_imu_read_reg	2
+../Core/Src/inv_imu_transport.c:41:5:inv_imu_write_reg	2
+../Core/Src/inv_imu_transport.c:50:5:inv_imu_read_sram	1
+../Core/Src/inv_imu_transport.c:56:5:inv_imu_write_sram	1
+../Core/Src/inv_imu_transport.c:66:12:read_dreg	2
+../Core/Src/inv_imu_transport.c:74:12:write_dreg	2
+../Core/Src/inv_imu_transport.c:82:12:check_out_of_bounds_mreg	14
+../Core/Src/inv_imu_transport.c:108:12:read_mreg	4
+../Core/Src/inv_imu_transport.c:135:12:write_mreg	4
