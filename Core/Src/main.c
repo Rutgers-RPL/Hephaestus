@@ -21,7 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "flash.h"
+#include "gd5f1gq5xe.h"
+#include "lfs.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -63,7 +65,48 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+struct flash_dev flash;
 
+static int flash_sync(const struct lfs_config *c)
+{
+	return 0;
+}
+
+static int gd5f1gq5xe_lfs_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
+		      void *location, lfs_size_t size)
+{
+	uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
+	uint16_t col = offset % GD5F_PAGE_SIZE;
+	return gd5f1gq5xe_read(page, col, location, size);
+}
+
+static int gd5f1gq5xe_lfs_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
+		      const void *data, lfs_size_t size)
+{
+	uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
+	uint16_t col = offset % GD5F_PAGE_SIZE;
+	return gd5f1gq5xe_write(page, col, data, size);
+}
+
+static int gd5f1gq5xe_lfs_erase(const struct lfs_config *c, lfs_block_t block) {
+	uint32_t page = block * GD5F_PAGES_PER_BLOCK;
+	return gd5f1gq5xe_erase(page);
+}
+
+static const struct lfs_config flash_cfg = {
+	.read  = &gd5f1gq5xe_lfs_read,
+	.prog  = &gd5f1gq5xe_lfs_prog,
+	.erase = &gd5f1gq5xe_lfs_erase,
+	.sync  = flash_sync,
+
+	.read_size      = GD5F_PAGE_SIZE,
+	.prog_size      = GD5F_PAGE_SIZE,
+	.block_size     = GD5F_BLOCK_SIZE,
+	.block_count    = GD5F_BLOCK_COUNT,
+	.cache_size     = GD5F_PAGE_SIZE,
+	.lookahead_size = 128,
+	.block_cycles   = 512,
+};
 /* USER CODE END 0 */
 
 /**
@@ -105,12 +148,18 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  /* while (1) */
+  /* { */
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+    /* HAL_GPIO_WritePin(GPIOB, PYRO3_Pin, GPIO_PIN_SET); */
+  /* } */
+
+  flash_init(&flash, GD5F1GQ5XE);
+  flash_mount(&flash, &flash_cfg);
+  uint32_t boot_count = flash_boot_count(&flash, false);
+  flash_unmount(&flash);
   /* USER CODE END 3 */
 }
 
@@ -318,8 +367,8 @@ static void MX_USB_OTG_FS_PCD_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
@@ -336,7 +385,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, IMU2_GYRO_CS_Pin|IMU2_ACC_CS_Pin|LED_Pin|BUZZER_Pin
-                          |FLASH_CS_Pin, GPIO_PIN_RESET);
+                          |PYRO3_Pin|FLASH_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(MAG_CS_GPIO_Port, MAG_CS_Pin, GPIO_PIN_RESET);
@@ -374,19 +423,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : IMU2_GYRO_CS_Pin IMU2_ACC_CS_Pin LED_Pin BUZZER_Pin
-                           FLASH_CS_Pin */
+                           PYRO3_Pin FLASH_CS_Pin */
   GPIO_InitStruct.Pin = IMU2_GYRO_CS_Pin|IMU2_ACC_CS_Pin|LED_Pin|BUZZER_Pin
-                          |FLASH_CS_Pin;
+                          |PYRO3_Pin|FLASH_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PYRO1_SENSE_Pin */
-  GPIO_InitStruct.Pin = PYRO1_SENSE_Pin;
+  /*Configure GPIO pins : PYRO3_SENSE_Pin PYRO1_SENSE_Pin */
+  GPIO_InitStruct.Pin = PYRO3_SENSE_Pin|PYRO1_SENSE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(PYRO1_SENSE_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PYRO2_SENSE_Pin */
   GPIO_InitStruct.Pin = PYRO2_SENSE_Pin;
@@ -401,8 +450,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MAG_CS_GPIO_Port, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -423,8 +472,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

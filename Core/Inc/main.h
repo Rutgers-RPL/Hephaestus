@@ -91,6 +91,10 @@ void Error_Handler(void);
 #define LED_GPIO_Port GPIOB
 #define BUZZER_Pin GPIO_PIN_13
 #define BUZZER_GPIO_Port GPIOB
+#define PYRO3_Pin GPIO_PIN_15
+#define PYRO3_GPIO_Port GPIOB
+#define PYRO3_SENSE_Pin GPIO_PIN_6
+#define PYRO3_SENSE_GPIO_Port GPIOC
 #define BAR_SCK_Pin GPIO_PIN_7
 #define BAR_SCK_GPIO_Port GPIOC
 #define PYRO1_SENSE_Pin GPIO_PIN_8
