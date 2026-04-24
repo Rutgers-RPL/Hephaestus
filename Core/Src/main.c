@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "bmi088.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,7 +48,13 @@ SPI_HandleTypeDef hspi3;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* USER CODE BEGIN PV */
+struct BMI088 imu1;
+struct BMI088 imu2;
+struct bmi08_sensor_data accel_data;
+struct bmi08_sensor_data gyro_data;
 
+// Status flags: 0 = success, 1 = fail
+uint8_t imu2_status = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -100,7 +107,23 @@ int main(void)
   MX_SPI3_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t buffer[128];
+    
+    // Initialize IMU2 with retries (Separate CS for accel and gyro)
+    int8_t ret;
+    uint8_t retry_count;
+
+    for (retry_count = 0; retry_count < 3; retry_count++) {
+      ret = bmi088_init(&imu2, &hspi1,
+                        BMI088_IMU2_ACC_CS_PIN, BMI088_IMU2_ACC_CS_PORT,
+                        BMI088_IMU2_GYRO_CS_PIN, BMI088_IMU2_GYRO_CS_PORT);
+
+      if (ret == BMI08_OK) {
+        imu2_status = 0;  // Success
+        break;
+      }
+      HAL_Delay(100);  // Wait before retry
+    }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -110,8 +133,28 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+
+	      // Read IMU2 data (only if initialized successfully)
+	      if (imu2_status == 0) {
+	        if (bmi088_update_accel_data(&imu2, &accel_data) == BMI08_OK) {
+	          float accel_x = bmi088_convert_accel_axis_data(&imu2, accel_data.x);
+	          float accel_y = bmi088_convert_accel_axis_data(&imu2, accel_data.y);
+	          float accel_z = bmi088_convert_accel_axis_data(&imu2, accel_data.z);
+
+	          // Data available - toggle LED to show activity
+	          HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	        }
+
+	        if (bmi088_update_gyro_data(&imu2, &gyro_data) == BMI08_OK) {
+	          float gyro_x = bmi088_convert_gyro_axis_data(&imu2, gyro_data.x);
+	          float gyro_y = bmi088_convert_gyro_axis_data(&imu2, gyro_data.y);
+	          float gyro_z = bmi088_convert_gyro_axis_data(&imu2, gyro_data.z);
+	        }
+	      }
+
+	      HAL_Delay(10);  // 100Hz polling rate
   /* USER CODE END 3 */
+  }
 }
 
 /**
@@ -318,8 +361,8 @@ static void MX_USB_OTG_FS_PCD_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
@@ -329,17 +372,25 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, BAR1_CS_Pin|IMU1_CS_Pin|PYRO1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, BAR1_CS_Pin|IMU1_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, BAR2_CS_Pin|PYRO2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BAR2_CS_GPIO_Port, BAR2_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, IMU2_GYRO_CS_Pin|IMU2_ACC_CS_Pin|LED_Pin|BUZZER_Pin
-                          |FLASH_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, IMU2_GYRO_CS_Pin|IMU2_ACC_CS_Pin|FLASH_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(MAG_CS_GPIO_Port, MAG_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LED_Pin|BUZZER_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(PYRO1_GPIO_Port, PYRO1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(PYRO2_GPIO_Port, PYRO2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(MAG_CS_GPIO_Port, MAG_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : BAR1_CS_Pin IMU1_CS_Pin PYRO1_Pin */
   GPIO_InitStruct.Pin = BAR1_CS_Pin|IMU1_CS_Pin|PYRO1_Pin;
@@ -401,8 +452,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(MAG_CS_GPIO_Port, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -423,8 +474,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

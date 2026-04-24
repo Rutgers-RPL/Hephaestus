@@ -1,0 +1,8 @@
+../Core/Src/bmi088.c:17:21:bmi088_read_spi	3
+../Core/Src/bmi088.c:43:21:bmi088_write_spi	3
+../Core/Src/bmi088.c:69:6:bmi088_delay_us	1
+../Core/Src/bmi088.c:73:8:bmi088_init	12
+../Core/Src/bmi088.c:192:8:bmi088_update_accel_data	1
+../Core/Src/bmi088.c:196:8:bmi088_update_gyro_data	1
+../Core/Src/bmi088.c:200:7:bmi088_convert_accel_axis_data	1
+../Core/Src/bmi088.c:204:7:bmi088_convert_gyro_axis_data	6

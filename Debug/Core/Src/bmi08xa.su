@@ -1,0 +1,10 @@
+../Core/Src/bmi08xa.c:493:8:bmi08xa_init	24	static
+../Core/Src/bmi08xa.c:521:8:bmi08xa_set_meas_conf	24	static
+../Core/Src/bmi08xa.c:541:8:bmi08xa_configure_data_synchronization	24	static
+../Core/Src/bmi08xa.c:569:8:bmi08xa_perform_selftest	32	static
+../Core/Src/bmi08xa.c:626:15:null_ptr_check	24	static
+../Core/Src/bmi08xa.c:647:15:enable_self_test	24	static
+../Core/Src/bmi08xa.c:687:15:positive_excited_accel	32	static
+../Core/Src/bmi08xa.c:707:15:negative_excited_accel	32	static
+../Core/Src/bmi08xa.c:738:15:validate_accel_self_test	48	static
+../Core/Src/bmi08xa.c:804:15:set_range	32	static
