@@ -1,0 +1,16 @@
+../Core/Src/lfs_port.c:10:13:csLow	8	static
+../Core/Src/lfs_port.c:14:13:csHigh	8	static
+../Core/Src/lfs_port.c:18:13:spiSend	16	static
+../Core/Src/lfs_port.c:22:13:spiReceive	16	static
+../Core/Src/lfs_port.c:45:5:lfs_read	40	static
+../Core/Src/lfs_port.c:78:5:lfs_prog	40	static
+../Core/Src/lfs_port.c:116:5:lfs_erase	32	static
+../Core/Src/lfs_port.c:141:5:lfs_sync	16	static
+../Core/Src/lfs_port.c:151:13:gd5f_unlock	16	static
+../Core/Src/lfs_port.c:165:5:stmlfs_mount	16	static
+../Core/Src/lfs_port.c:177:5:stmlfs_unmount	8	static
+../Core/Src/lfs_port.c:182:5:stmlfs_file_open	24	static
+../Core/Src/lfs_port.c:187:5:stmlfs_file_read	24	static
+../Core/Src/lfs_port.c:192:5:stmlfs_file_rewind	16	static
+../Core/Src/lfs_port.c:197:13:stmlfs_file_write	24	static
+../Core/Src/lfs_port.c:202:5:stmlfs_file_close	16	static

@@ -22,10 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bmi088.h"
-#include "flash.h"
-#include "gd5f1gq5xe.h"
+#include "lfs_port.h"
 #include "lfs.h"
-#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,46 +71,7 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-struct flash_dev flash;
 
-static int flash_sync(const struct lfs_config *c) { return 0; }
-
-static int gd5f1gq5xe_lfs_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
-                                void *location, lfs_size_t size)
-{
-    uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
-    uint16_t col  = offset % GD5F_PAGE_SIZE;
-    return gd5f1gq5xe_read(page, col, location, size);
-}
-
-static int gd5f1gq5xe_lfs_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
-                                const void *data, lfs_size_t size)
-{
-    uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
-    uint16_t col  = offset % GD5F_PAGE_SIZE;
-    return gd5f1gq5xe_write(page, col, data, size);
-}
-
-static int gd5f1gq5xe_lfs_erase(const struct lfs_config *c, lfs_block_t block)
-{
-    uint32_t page = block * GD5F_PAGES_PER_BLOCK;
-    return gd5f1gq5xe_erase(page);
-}
-
-static const struct lfs_config flash_cfg = {
-    .read  = &gd5f1gq5xe_lfs_read,
-    .prog  = &gd5f1gq5xe_lfs_prog,
-    .erase = &gd5f1gq5xe_lfs_erase,
-    .sync  = flash_sync,
-
-    .read_size      = GD5F_PAGE_SIZE,
-    .prog_size      = GD5F_PAGE_SIZE,
-    .block_size     = GD5F_BLOCK_SIZE,
-    .block_count    = GD5F_BLOCK_COUNT,
-    .cache_size     = GD5F_PAGE_SIZE,
-    .lookahead_size = 128,
-    .block_cycles   = 512,
-};
 /* USER CODE END 0 */
 
 /**
@@ -149,36 +108,63 @@ int main(void)
   MX_SPI3_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-    flash_init(&flash, GD5F1GQ5XE);
-    flash_mount(&flash, &flash_cfg);
-    uint32_t boot_count = flash_boot_count(&flash, false);
-    flash_unmount(&flash);
 
     /* =====================================================================
-     * DEBUG SECTION — CS PIN TOGGLE TEST
-     * Set a breakpoint at each HAL_GPIO_WritePin call and probe PB1/PB2
-     * with a scope or multimeter. ACC_CS = PB2, GYRO_CS = PB1.
-     * Both start HIGH (deselected). Each step drives one pin LOW then back HIGH.
-     * LED blinks between each phase so you can tell where you are without a debugger.
-     * Comment out this block when done.
+     * DEBUG SECTION — FLASH BRING-UP TEST
+     *
+     * Set a breakpoint at each labelled line and inspect the variable in
+     * the Watch/Expressions pane before stepping forward.
+     *
+     * Expected happy path:
+     *   dbg_mount_err   == 0   (mounted, or auto-formatted then mounted)
+     *   dbg_boot_count  >= 1   (increments every power cycle)
+     *   dbg_read_back   == 0xDEADBEEF  (round-trip write/read correct)
+     *   dbg_unmount_err == 0   (clean flush)
+     *
+     * Comment out #define DEBUG_FLASH when done.
      * ===================================================================== */
-    #define DEBUG_CS_TOGGLE 1
-    #if DEBUG_CS_TOGGLE
+    #define DEBUG_FLASH 1
+    #if DEBUG_FLASH
     {
-        // Phase 0 — GYRO_CS (PB1) HIGH. Probe PB1, expect HIGH.
-        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_SET);
-        HAL_Delay(1000);
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);  // LED blink = entering LOW phase
+        int      dbg_mount_err   = 0;
+        int      dbg_unmount_err = 0;
+        uint32_t dbg_boot_count  = 0;
+        uint32_t dbg_write_val   = 0xDEADBEEF;
+        uint32_t dbg_read_back   = 0;
+        lfs_file_t dbg_file;
 
-        // Phase 1 — GYRO_CS (PB1) LOW. Probe PB1, expect LOW.
-        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_RESET);
-        HAL_Delay(1000);
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);  // LED blink = done
+        // BREAKPOINT → inspect dbg_mount_err (expect 0)
+        dbg_mount_err = stmlfs_mount();
 
-        // Back HIGH
-        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_SET);
+        if (dbg_mount_err == 0) {
+            // BREAKPOINT → inspect dbg_boot_count (expect >= 1, increments each run)
+            stmlfs_file_open(&dbg_file, "boot_count", LFS_O_RDWR | LFS_O_CREAT);
+            stmlfs_file_read(&dbg_file, &dbg_boot_count, sizeof(dbg_boot_count));
+            dbg_boot_count++;
+            stmlfs_file_rewind(&dbg_file);
+            stmlfs_file_write(&dbg_file, &dbg_boot_count, sizeof(dbg_boot_count));
+            stmlfs_file_close(&dbg_file);
+
+            // BREAKPOINT → inspect dbg_read_back (expect == 0xDEADBEEF)
+            stmlfs_file_open(&dbg_file, "dbg_scratch", LFS_O_RDWR | LFS_O_CREAT | LFS_O_TRUNC);
+            stmlfs_file_write(&dbg_file, &dbg_write_val, sizeof(dbg_write_val));
+            stmlfs_file_rewind(&dbg_file);
+            stmlfs_file_read(&dbg_file, &dbg_read_back, sizeof(dbg_read_back));
+            stmlfs_file_close(&dbg_file);
+
+            // BREAKPOINT → inspect dbg_unmount_err (expect 0)
+            dbg_unmount_err = stmlfs_unmount();
+        }
+
+        (void)dbg_mount_err;
+        (void)dbg_boot_count;
+        (void)dbg_read_back;
+        (void)dbg_unmount_err;
     }
-    #endif /* DEBUG_CS_TOGGLE */
+    #else
+    stmlfs_mount();
+    stmlfs_unmount();
+    #endif /* DEBUG_FLASH */
     /* ===================================================================== */
 
     // Initialize IMU2 with retries (Separate CS for accel and gyro)

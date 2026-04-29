@@ -1,4 +1,4 @@
-Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
+Core/Src/lfs_port.o: ../Core/Src/lfs_port.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Core/Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
@@ -28,10 +28,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pcd.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usb.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pcd_ex.h \
- ../Core/Inc/bmi088.h ../Core/Inc/bmi08x.h ../Core/Inc/bmi08.h \
- ../Core/Inc/bmi08_defs.h ../Core/Inc/main.h ../Core/Inc/lfs_port.h \
  ../Core/Inc/littlefs/lfs.h ../Core/Inc/littlefs/lfs_util.h \
- ../Core/Inc/littlefs/lfs_util.h
+ ../Core/Inc/lfs_port.h ../Core/Inc/littlefs/lfs_util.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -62,12 +60,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pcd.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usb.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pcd_ex.h:
-../Core/Inc/bmi088.h:
-../Core/Inc/bmi08x.h:
-../Core/Inc/bmi08.h:
-../Core/Inc/bmi08_defs.h:
-../Core/Inc/main.h:
-../Core/Inc/lfs_port.h:
 ../Core/Inc/littlefs/lfs.h:
 ../Core/Inc/littlefs/lfs_util.h:
+../Core/Inc/lfs_port.h:
 ../Core/Inc/littlefs/lfs_util.h:
