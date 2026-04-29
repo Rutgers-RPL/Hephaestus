@@ -22,6 +22,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bmi088.h"
+#include "flash.h"
+#include "gd5f1gq5xe.h"
+#include "lfs.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -70,7 +73,46 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+struct flash_dev flash;
 
+static int flash_sync(const struct lfs_config *c) { return 0; }
+
+static int gd5f1gq5xe_lfs_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
+                                void *location, lfs_size_t size)
+{
+    uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
+    uint16_t col  = offset % GD5F_PAGE_SIZE;
+    return gd5f1gq5xe_read(page, col, location, size);
+}
+
+static int gd5f1gq5xe_lfs_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
+                                const void *data, lfs_size_t size)
+{
+    uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
+    uint16_t col  = offset % GD5F_PAGE_SIZE;
+    return gd5f1gq5xe_write(page, col, data, size);
+}
+
+static int gd5f1gq5xe_lfs_erase(const struct lfs_config *c, lfs_block_t block)
+{
+    uint32_t page = block * GD5F_PAGES_PER_BLOCK;
+    return gd5f1gq5xe_erase(page);
+}
+
+static const struct lfs_config flash_cfg = {
+    .read  = &gd5f1gq5xe_lfs_read,
+    .prog  = &gd5f1gq5xe_lfs_prog,
+    .erase = &gd5f1gq5xe_lfs_erase,
+    .sync  = flash_sync,
+
+    .read_size      = GD5F_PAGE_SIZE,
+    .prog_size      = GD5F_PAGE_SIZE,
+    .block_size     = GD5F_BLOCK_SIZE,
+    .block_count    = GD5F_BLOCK_COUNT,
+    .cache_size     = GD5F_PAGE_SIZE,
+    .lookahead_size = 128,
+    .block_cycles   = 512,
+};
 /* USER CODE END 0 */
 
 /**
@@ -107,10 +149,42 @@ int main(void)
   MX_SPI3_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-    
+    flash_init(&flash, GD5F1GQ5XE);
+    flash_mount(&flash, &flash_cfg);
+    uint32_t boot_count = flash_boot_count(&flash, false);
+    flash_unmount(&flash);
+
+    /* =====================================================================
+     * DEBUG SECTION — CS PIN TOGGLE TEST
+     * Set a breakpoint at each HAL_GPIO_WritePin call and probe PB1/PB2
+     * with a scope or multimeter. ACC_CS = PB2, GYRO_CS = PB1.
+     * Both start HIGH (deselected). Each step drives one pin LOW then back HIGH.
+     * LED blinks between each phase so you can tell where you are without a debugger.
+     * Comment out this block when done.
+     * ===================================================================== */
+    #define DEBUG_CS_TOGGLE 1
+    #if DEBUG_CS_TOGGLE
+    {
+        // Phase 0 — GYRO_CS (PB1) HIGH. Probe PB1, expect HIGH.
+        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_SET);
+        HAL_Delay(1000);
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);  // LED blink = entering LOW phase
+
+        // Phase 1 — GYRO_CS (PB1) LOW. Probe PB1, expect LOW.
+        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_RESET);
+        HAL_Delay(1000);
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);  // LED blink = done
+
+        // Back HIGH
+        HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_SET);
+    }
+    #endif /* DEBUG_CS_TOGGLE */
+    /* ===================================================================== */
+
     // Initialize IMU2 with retries (Separate CS for accel and gyro)
-    int8_t ret;
+    int8_t ret = BMI08_OK;
     uint8_t retry_count;
+    int8_t bmi_init_err = 0;
 
     for (retry_count = 0; retry_count < 3; retry_count++) {
       ret = bmi088_init(&imu2, &hspi1,
@@ -121,7 +195,8 @@ int main(void)
         imu2_status = 0;  // Success
         break;
       }
-      HAL_Delay(100);  // Wait before retry
+      bmi_init_err = ret;  // Capture last Bosch error code for debugging
+      HAL_Delay(500);  // Wait before retry
     }
 
   /* USER CODE END 2 */
@@ -153,8 +228,8 @@ int main(void)
 	      }
 
 	      HAL_Delay(10);  // 100Hz polling rate
-  /* USER CODE END 3 */
   }
+  /* USER CODE END 3 */
 }
 
 /**
@@ -174,10 +249,8 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 15;
@@ -193,7 +266,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
@@ -227,7 +300,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
