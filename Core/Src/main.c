@@ -21,9 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "flash.h"
-#include "gd5f1gq5xe.h"
-#include "lfs.h"
+#include "sensor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,9 +40,13 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
+
+UART_HandleTypeDef huart1;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
@@ -59,54 +61,47 @@ static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-struct flash_dev flash;
 
-static int flash_sync(const struct lfs_config *c)
-{
-	return 0;
-}
+/* // DMA Callback: Called when GPS Buffer is filled or there is a gap in data */
+/* // transfer between GPS and the Pin. */
+/* void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) { */
+/*     if (huart->Instance == gps_dev.uart->Instance) { */
+/*         // Clear any Overrun error */
+/*         __HAL_UART_CLEAR_OREFLAG(huart); */
+/*         // Parse the entire DMA buffer (if a GGA sentence is found, store into gps_packet) */
+/*         gps_parse(&gps); */
+/*         // Restart DMA reception */
+/*         HAL_UARTEx_ReceiveToIdle_DMA(huart, gps_dev->dma_buffer, BUFFER_SIZE); */
+/*     } */
+/* } */
 
-static int gd5f1gq5xe_lfs_read(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
-		      void *location, lfs_size_t size)
-{
-	uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
-	uint16_t col = offset % GD5F_PAGE_SIZE;
-	return gd5f1gq5xe_read(page, col, location, size);
-}
+/* // UART Error Callback in case error occurs in DMA call back */
+/* void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) { */
+/*     if (huart->Instance == gps_dev.uart->Instance) { */
+/*         // Clear Overrun */
+/*         __HAL_UART_CLEAR_OREFLAG(huart); */
+/*         // Restart DMA */
+/*         HAL_UARTEx_ReceiveToIdle_DMA(huart, gps_dev->dma_buffer, BUFFER_SIZE); */
+/*     } */
+/* } */
 
-static int gd5f1gq5xe_lfs_prog(const struct lfs_config *c, lfs_block_t block, lfs_off_t offset,
-		      const void *data, lfs_size_t size)
-{
-	uint32_t page = block * GD5F_PAGES_PER_BLOCK + (offset / GD5F_PAGE_SIZE);
-	uint16_t col = offset % GD5F_PAGE_SIZE;
-	return gd5f1gq5xe_write(page, col, data, size);
-}
-
-static int gd5f1gq5xe_lfs_erase(const struct lfs_config *c, lfs_block_t block) {
-	uint32_t page = block * GD5F_PAGES_PER_BLOCK;
-	return gd5f1gq5xe_erase(page);
-}
-
-static const struct lfs_config flash_cfg = {
-	.read  = &gd5f1gq5xe_lfs_read,
-	.prog  = &gd5f1gq5xe_lfs_prog,
-	.erase = &gd5f1gq5xe_lfs_erase,
-	.sync  = flash_sync,
-
-	.read_size      = GD5F_PAGE_SIZE,
-	.prog_size      = GD5F_PAGE_SIZE,
-	.block_size     = GD5F_BLOCK_SIZE,
-	.block_count    = GD5F_BLOCK_COUNT,
-	.cache_size     = GD5F_PAGE_SIZE,
-	.lookahead_size = 128,
-	.block_cycles   = 512,
-};
+/* // UART Error Callback in case error occurs in DMA call back */
+/* void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) { */
+/*     if (huart->Instance == UART8) { */
+/*         // Clear Overrun */
+/*         __HAL_UART_CLEAR_OREFLAG(&huart8); */
+/*         // Restart DMA */
+/*         HAL_UARTEx_ReceiveToIdle_DMA(&huart8, gps_dma_buffer, BUFFER_SIZE); */
+/*     } */
+/* } */
 /* USER CODE END 0 */
 
 /**
@@ -142,6 +137,8 @@ int main(void)
   MX_SPI2_Init();
   MX_SPI3_Init();
   MX_USB_OTG_FS_PCD_Init();
+  MX_I2C1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   uint8_t buffer[128];
   /* USER CODE END 2 */
@@ -156,10 +153,10 @@ int main(void)
     /* HAL_GPIO_WritePin(GPIOB, PYRO3_Pin, GPIO_PIN_SET); */
   /* } */
 
-  flash_init(&flash, GD5F1GQ5XE);
-  flash_mount(&flash, &flash_cfg);
-  uint32_t boot_count = flash_boot_count(&flash, false);
-  flash_unmount(&flash);
+  /* flash_init(&flash, GD5F1GQ5XE); */
+  /* flash_mount(&flash, &flash_cfg); */
+  /* uint32_t boot_count = flash_boot_count(&flash, false); */
+  /* flash_unmount(&flash); */
   /* USER CODE END 3 */
 }
 
@@ -208,6 +205,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -321,6 +352,39 @@ static void MX_SPI3_Init(void)
   /* USER CODE BEGIN SPI3_Init 2 */
 
   /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 

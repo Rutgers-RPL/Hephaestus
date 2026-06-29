@@ -1,0 +1,3 @@
+[submodule "Drivers/CommonDrivers"]
+	path = Drivers/CommonDrivers
+	url = https://github.com/Rutgers-RPL/CommonDrivers.git
