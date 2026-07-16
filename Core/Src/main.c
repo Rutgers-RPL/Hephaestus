@@ -24,9 +24,11 @@
 /* USER CODE BEGIN Includes */
 #include "sensor.h"
 #include "flash.h"
-
 #include "bmi088.h"
-/* #include "bmp581.h" */
+#include "bmp581.h"
+#include "gd5f1gq5xe.h"
+
+#include "semphr.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,15 +47,11 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
+CRC_HandleTypeDef hcrc;
 
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
-
-UART_HandleTypeDef huart1;
-
-PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -63,24 +61,62 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
-static struct bmi088_ctx bmi088 = (struct bmi088_ctx) {
-  .accel_intf = (struct bmi088_sensor_intf) {
-    .gpio_pin = IMU2_ACC_CS_Pin,
-    .gpio_port = IMU2_ACC_CS_GPIO_Port,
-    .spi_handle = &hspi1,
+struct bmi088_ctx bmi088 = {
+  .accel_spi = {
+    .pin = IMU2_ACC_CS_Pin,
+    .port = IMU2_ACC_CS_GPIO_Port,
+    .handle = &hspi1,
   },
-  .gyro_intf = (struct bmi088_sensor_intf) {
-    .gpio_pin = IMU2_GYRO_CS_Pin,
-    .gpio_port = IMU2_GYRO_CS_GPIO_Port,
-    .spi_handle = &hspi1,
+  .gyro_spi = {
+    .pin = IMU2_GYRO_CS_Pin,
+    .port = IMU2_GYRO_CS_GPIO_Port,
+    .handle = &hspi1,
   },
 };
+struct bmp581_ctx bmp581 = {
+  .handle = {
+    .protocol = SPI,
+    .def = {
+      .spi = {
+        .pin = BAR1_CS_Pin,
+        .port = BAR1_CS_GPIO_Port,
+        .handle = &hspi2,
+      }
+    }
+  }
+};
+enum sensors {
+  BMP581,
+  BMI088,
+  NUMBER_SENSORS
+};
+struct sensor sensors[NUMBER_SENSORS];
+bool sensors_res[NUMBER_SENSORS];
 
-/* TODO: this one is spi for some reason, need to discuss internally */
-/* static struct bmp581_ctx bmp581 = (struct bmp581_ctx) { */
-/*   .i2c =  */
-/* }; */
+struct flash flash = {0};
+struct handle_spi flash_spi = {
+  .pin = FLASH_CS_Pin,
+  .port = FLASH_CS_GPIO_Port,
+  .handle = &hspi3,
+};
 
+SemaphoreHandle_t packet_mutex = NULL;
+lfs_file_t packet_file;
+struct packet packet = {0};
+
+osThreadId_t sensor_task_handle = NULL;
+const osThreadAttr_t sensor_task_attributes = {
+  .name = "sensor task",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+osThreadId_t flash_task_handle = NULL;
+const osThreadAttr_t flash_task_attributes = {
+  .name = "flash task",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,50 +125,75 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_SPI3_Init(void);
-static void MX_USB_OTG_FS_PCD_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_USART1_UART_Init(void);
+static void MX_CRC_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
+static inline uint32_t checksum(const uint8_t *data, size_t length)
+{
+  return HAL_CRC_Calculate(&hcrc, (uint32_t *)data, length);
+}
 
+static void SensorTask(void *argument)
+{
+  // Simple counter for task notification 
+  uint32_t counter = 0;
+  // Run this task 200 times per second 
+  TickType_t last_wake_up = xTaskGetTickCount();
+  int hertz = 200;
+
+  for (;;) {
+    if (xSemaphoreTake(packet_mutex, portMAX_DELAY) == pdTRUE) {
+      // Read from all sensors
+      for (int i = 0; i < NUMBER_SENSORS; ++i) {
+        if (sensors_res[i]) {
+          sensors[i].read(sensors[i].ctx, &packet);
+        }
+      }
+
+      // This is originally for camera, but we will use it for flash for now
+      packet.status = (flash_task_handle != NULL);
+      // TODO: change this to microseconds at a later time
+      packet.time_us = xTaskGetTickCount() * portTICK_PERIOD_MS;
+      packet.checksum = checksum((const uint8_t *) &packet + sizeof(short),
+                                 sizeof(packet) - 6);
+      HAL_GPIO_TogglePin(GPIOB, LED_Pin);
+      xSemaphoreGive(packet_mutex);
+
+      // Tell flash to save data every other packet
+      if ((++counter) >= 2 && flash_task_handle != NULL) {
+        counter = 0;
+        xTaskNotifyGive(flash_task_handle); 
+      }
+    }   
+    // Go to sleep little task...
+    vTaskDelayUntil(&last_wake_up, configTICK_RATE_HZ / hertz);
+  }
+}
+
+static void FlashTask(void *argument)
+{
+  struct packet copy = {0};
+
+  for (;;) {
+    // Wait until notified
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+    // Make a local copy, so we don't block
+    if (xSemaphoreTake(packet_mutex, portMAX_DELAY) == pdTRUE) {
+      memcpy(&copy, &packet, sizeof(packet));
+      xSemaphoreGive(packet_mutex);
+    }
+
+    // Save to flash
+    flash_append(&flash, &packet_file, (uint8_t*) &copy, sizeof(copy));
+  }
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* // DMA Callback: Called when GPS Buffer is filled or there is a gap in data */
-/* // transfer between GPS and the Pin. */
-/* void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t offset) { */
-/*     if (huart->Instance == gps_dev.uart->Instance) { */
-/*         // Clear any Overrun error */
-/*         __HAL_UART_CLEAR_OREFLAG(huart); */
-/*         // Parse the entire DMA buffer (if a GGA sentence is found, store into gps_packet) */
-/*         gps_parse(&gps); */
-/*         // Restart DMA reception */
-/*         HAL_UARTEx_ReceiveToIdle_DMA(huart, gps_dev->dma_buffer, BUFFER_SIZE); */
-/*     } */
-/* } */
-
-/* // UART Error Callback in case error occurs in DMA call back */
-/* void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) { */
-/*     if (huart->Instance == gps_dev.uart->Instance) { */
-/*         // Clear Overrun */
-/*         __HAL_UART_CLEAR_OREFLAG(huart); */
-/*         // Restart DMA */
-/*         HAL_UARTEx_ReceiveToIdle_DMA(huart, gps_dev->dma_buffer, BUFFER_SIZE); */
-/*     } */
-/* } */
-
-/* // UART Error Callback in case error occurs in DMA call back */
-/* void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) { */
-/*     if (huart->Instance == UART8) { */
-/*         // Clear Overrun */
-/*         __HAL_UART_CLEAR_OREFLAG(&huart8); */
-/*         // Restart DMA */
-/*         HAL_UARTEx_ReceiveToIdle_DMA(&huart8, gps_dma_buffer, BUFFER_SIZE); */
-/*     } */
-/* } */
 /* USER CODE END 0 */
 
 /**
@@ -152,7 +213,19 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  packet.magic = 0xBEEF;
+  int8_t bmp581_res = bmp581_init(&bmp581, &sensors[BMP581]);
+  int8_t bmi088_res = bmi088_init(&bmi088, &sensors[BMI088]);
+  sensors_res[BMP581] = (bmp581_res == BMP5_OK);
+  sensors_res[BMI088] = (bmi088_res == BMI08_OK);
 
+  bool flash_enabled = gd5f1gq5xe_init(&flash, &flash_spi);
+  int32_t fs_size = flash_mount(&flash);
+  if (fs_size < 0) flash_enabled = false;
+  if (flash_enabled) {
+    uint32_t boot_count = flash_boot_count(&flash, false);
+    uint32_t file_size = flash_open(&flash, &packet_file, "packets");
+  }
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -167,11 +240,8 @@ int main(void)
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_SPI3_Init();
-  MX_USB_OTG_FS_PCD_Init();
-  MX_I2C1_Init();
-  MX_USART1_UART_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t buffer[128];
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -179,6 +249,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
+  packet_mutex = xSemaphoreCreateMutex();
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -199,6 +270,10 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  sensor_task_handle = osThreadNew(SensorTask, NULL, &sensor_task_attributes);
+  if (flash_enabled) {
+    flash_task_handle = osThreadNew(FlashTask, NULL, &flash_task_attributes);
+  }
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -244,16 +319,10 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 15;
-  RCC_OscInitStruct.PLL.PLLN = 144;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 5;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -275,36 +344,28 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief CRC Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_CRC_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN CRC_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END CRC_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  /* USER CODE BEGIN CRC_Init 1 */
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
+  /* USER CODE BEGIN CRC_Init 2 */
 
-  /* USER CODE END I2C1_Init 2 */
+  /* USER CODE END CRC_Init 2 */
 
 }
 
@@ -331,7 +392,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -369,7 +430,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -407,7 +468,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -419,74 +480,6 @@ static void MX_SPI3_Init(void)
   /* USER CODE BEGIN SPI3_Init 2 */
 
   /* USER CODE END SPI3_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USB_OTG_FS Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_OTG_FS_PCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 0 */
-
-  /* USER CODE END USB_OTG_FS_Init 0 */
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 1 */
-
-  /* USER CODE END USB_OTG_FS_Init 1 */
-  hpcd_USB_OTG_FS.Instance = USB_OTG_FS;
-  hpcd_USB_OTG_FS.Init.dev_endpoints = 4;
-  hpcd_USB_OTG_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_OTG_FS.Init.dma_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.phy_itface = PCD_PHY_EMBEDDED;
-  hpcd_USB_OTG_FS.Init.Sof_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.vbus_sensing_enable = DISABLE;
-  hpcd_USB_OTG_FS.Init.use_dedicated_ep1 = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_OTG_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_OTG_FS_Init 2 */
-
-  /* USER CODE END USB_OTG_FS_Init 2 */
 
 }
 

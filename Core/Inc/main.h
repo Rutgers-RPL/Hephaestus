@@ -105,10 +105,6 @@ void Error_Handler(void);
 #define PYRO2_GPIO_Port GPIOA
 #define PYRO2_SENSE_Pin GPIO_PIN_9
 #define PYRO2_SENSE_GPIO_Port GPIOA
-#define USB_N_Pin GPIO_PIN_11
-#define USB_N_GPIO_Port GPIOA
-#define USB_P_Pin GPIO_PIN_12
-#define USB_P_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
