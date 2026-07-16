@@ -157,7 +157,7 @@ static void SensorTask(void *argument)
       packet.time_us = xTaskGetTickCount() * portTICK_PERIOD_MS;
       packet.checksum = checksum((const uint8_t *) &packet + sizeof(short),
                                  sizeof(packet) - 6);
-      HAL_GPIO_TogglePin(GPIOB, LED_Pin);
+      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
       xSemaphoreGive(packet_mutex);
 
       // Tell flash to save data every other packet
