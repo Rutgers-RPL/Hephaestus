@@ -213,19 +213,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  packet.magic = 0xBEEF;
-  int8_t bmp581_res = bmp581_init(&bmp581, &sensors[BMP581]);
-  int8_t bmi088_res = bmi088_init(&bmi088, &sensors[BMI088]);
-  sensors_res[BMP581] = (bmp581_res == BMP5_OK);
-  sensors_res[BMI088] = (bmi088_res == BMI08_OK);
-
-  bool flash_enabled = gd5f1gq5xe_init(&flash, &flash_spi);
-  int32_t fs_size = flash_mount(&flash);
-  if (fs_size < 0) flash_enabled = false;
-  if (flash_enabled) {
-    uint32_t boot_count = flash_boot_count(&flash, false);
-    uint32_t file_size = flash_open(&flash, &packet_file, "packets");
-  }
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -242,6 +229,19 @@ int main(void)
   MX_SPI3_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
+  packet.magic = 0xBEEF;
+  int8_t bmp581_res = bmp581_init(&bmp581, &sensors[BMP581]);
+  int8_t bmi088_res = bmi088_init(&bmi088, &sensors[BMI088]);
+  sensors_res[BMP581] = (bmp581_res == BMP5_OK);
+  sensors_res[BMI088] = (bmi088_res == BMI08_OK);
+
+  bool flash_enabled = gd5f1gq5xe_init(&flash, &flash_spi);
+  int32_t fs_size = flash_mount(&flash);
+  if (fs_size < 0) flash_enabled = false;
+  if (flash_enabled) {
+    uint32_t boot_count = flash_boot_count(&flash, false);
+    uint32_t file_size = flash_open(&flash, &packet_file, "packets");
+  }
   /* USER CODE END 2 */
 
   /* Init scheduler */
