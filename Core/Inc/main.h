@@ -49,6 +49,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -89,8 +91,6 @@ void Error_Handler(void);
 #define IMU2_ACC_INT_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_12
 #define LED_GPIO_Port GPIOB
-#define BUZZER_Pin GPIO_PIN_13
-#define BUZZER_GPIO_Port GPIOB
 #define PYRO3_Pin GPIO_PIN_15
 #define PYRO3_GPIO_Port GPIOB
 #define PYRO3_SENSE_Pin GPIO_PIN_6
