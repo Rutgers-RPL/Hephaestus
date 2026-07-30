@@ -49,6 +49,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -89,8 +91,10 @@ void Error_Handler(void);
 #define IMU2_ACC_INT_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_12
 #define LED_GPIO_Port GPIOB
-#define BUZZER_Pin GPIO_PIN_13
-#define BUZZER_GPIO_Port GPIOB
+#define PYRO3_Pin GPIO_PIN_15
+#define PYRO3_GPIO_Port GPIOB
+#define PYRO3_SENSE_Pin GPIO_PIN_6
+#define PYRO3_SENSE_GPIO_Port GPIOC
 #define BAR_SCK_Pin GPIO_PIN_7
 #define BAR_SCK_GPIO_Port GPIOC
 #define PYRO1_SENSE_Pin GPIO_PIN_8
@@ -101,10 +105,6 @@ void Error_Handler(void);
 #define PYRO2_GPIO_Port GPIOA
 #define PYRO2_SENSE_Pin GPIO_PIN_9
 #define PYRO2_SENSE_GPIO_Port GPIOA
-#define USB_N_Pin GPIO_PIN_11
-#define USB_N_GPIO_Port GPIOA
-#define USB_P_Pin GPIO_PIN_12
-#define USB_P_GPIO_Port GPIOA
 #define SWDIO_Pin GPIO_PIN_13
 #define SWDIO_GPIO_Port GPIOA
 #define SWCLK_Pin GPIO_PIN_14
