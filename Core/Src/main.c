@@ -28,6 +28,7 @@
 #include "bmi088.h"
 #include "bmp581.h"
 #include "gd5f1gq5xe.h"
+#include "device-init.h"
 
 #include "semphr.h"
 #include "usb_device.h"
@@ -276,6 +277,9 @@ int main(void)
     uint32_t boot_count = flash_boot_count(&flash, false);
     uint32_t file_size = flash_open(&flash, &packet_file, "packets");
   }
+
+  device_init();
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
