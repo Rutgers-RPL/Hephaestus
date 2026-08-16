@@ -9,10 +9,13 @@
 extern "C" {
 #endif
 
+#include "hal.h"
+
 /**
  * @brief device init
  */
-void device_init(void);
+void device_init();
+void device_disable_flash();
 
 #ifdef __cplusplus
 }
