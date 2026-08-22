@@ -1,0 +1,93 @@
+name: STM32 Firmware CI/CD
+
+on:
+  push:
+    branches: [ "main" ]  # Triggers on push to main
+    tags: [ "v*" ]        # Triggers on version tags (e.g. v1.0.0)
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:      # Allows manual trigger from GitHub UI
+
+jobs:
+  build:
+    name: Build STM32 Firmware
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive # Automatically pulls HAL, CMSIS, or FreeRTOS submodules
+
+      - name: Set up Arm GNU Toolchain (GCC 13.2.1)
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1' # Explicitly uses GCC 13.2.1
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure CMake (${{ matrix.build_type }})
+        run: |
+          cmake --preset ${{ matrix.build_type }}
+
+      - name: Build Firmware
+        run: |
+          cmake --build build/${{ matrix.build_type }} --preset ${{ matrix.build_type }} --parallel
+
+      - name: Stage Artifacts
+        run: |
+          mkdir -p artifacts
+          # Finds the compiled .elf and renames it cleanly for the artifact upload step
+          find build/${{ matrix.build_type }} -maxdepth 2 -name "*.elf" -exec cp {} artifacts/firmware-${{ matrix.build_type }}.elf \;
+
+      - name: Upload Build Artifacts (${{ matrix.build_type }})
+        uses: actions/upload-artifact@v7
+        with:
+          name: stm32-firmware-${{ matrix.build_type }}
+          path: artifacts/firmware-${{ matrix.build_type }}.elf
+          archive: false
+          if-no-files-found: error
+
+  release:
+    name: Make Releases
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          pattern: firmware-*
+          merge-multiple: true
+
+      - name: Release for Tag
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          working_directory: artifacts
+          generate_release_notes: true
+          files: |
+            firmware-Debug.elf
+            firmware-Release.elf
+
+      - name: Release for Latest
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          working_directory: artifacts
+          tag_name: latest
+          files: |
+            firmware-Debug.elf
+            firmware-Release.elf
