@@ -122,6 +122,13 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(BAR1_CS_GPIO_Port, BAR1_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(BAR2_CS_GPIO_Port, BAR2_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(IMU1_CS_GPIO_Port, IMU1_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(IMU2_GYRO_CS_GPIO_Port, IMU2_GYRO_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(IMU2_ACC_CS_GPIO_Port, IMU2_ACC_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(MAG_CS_GPIO_Port, MAG_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(FLASH_CS_GPIO_Port, FLASH_CS_Pin, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
   /* Init scheduler */

@@ -57,7 +57,7 @@ extern "C" {
       for (int c = 0; c < 10; ++c) {
         ready = sensor->init();
         if (ready) break;
-        Delay(20000);
+        Delay(200);
       }
       if (!ready) sensor = nullptr; 
     }
@@ -72,7 +72,7 @@ extern "C" {
         }
         break;
       }
-      Delay(5000);
+      Delay(1000);
     }
     Common::LOG("Flash: %u (size), %u (boot), %u (packet_size)\r\n", fs_size, boot_count, file_size);
 
