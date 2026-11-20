@@ -1,6 +1,7 @@
 build/
+.vscode
 .settings
-.cproject
 .project
 .launch
+.cproject
 .cache

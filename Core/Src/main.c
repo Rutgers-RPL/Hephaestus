@@ -23,13 +23,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "sensor.h"
-#include "flash.h"
-#include "bmi088.h"
-#include "bmp581.h"
-#include "gd5f1gq5xe.h"
+/* const int __attribute__((used)) uxTopUsedPriority = configMAX_PRIORITIES - 1; */
+#include "device-init.h"
+const volatile UBaseType_t uxTopUsedPriority = 15;
 
-#include "semphr.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 /* USER CODE END Includes */
@@ -62,74 +59,12 @@ TIM_HandleTypeDef htim5;
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
 /// For openocd, it is an official workaround for the following
 /// Error: FreeRTOS: uxTopUsedPriority is not defined, consult the OpenOCD manual for a work-around
-const int __attribute__((used)) uxTopUsedPriority = configMAX_PRIORITIES - 1;
-
-/// Sensors
-struct bmi088_ctx bmi088 = {
-  .accel_spi = {
-    .pin = IMU2_ACC_CS_Pin,
-    .port = IMU2_ACC_CS_GPIO_Port,
-    .handle = &hspi1,
-  },
-  .gyro_spi = {
-    .pin = IMU2_GYRO_CS_Pin,
-    .port = IMU2_GYRO_CS_GPIO_Port,
-    .handle = &hspi1,
-  },
-};
-struct bmp581_ctx bmp581 = {
-  .handle = {
-    .protocol = SPI,
-    .def = {
-      .spi = {
-        .pin = BAR1_CS_Pin,
-        .port = BAR1_CS_GPIO_Port,
-        .handle = &hspi2,
-      }
-    }
-  }
-};
-enum sensors {
-  BMP581,
-  BMI088,
-  NUMBER_SENSORS
-};
-struct sensor sensors[NUMBER_SENSORS];
-bool sensors_res[NUMBER_SENSORS];
-
-/// Flash
-bool save_to_flash = true;
-struct flash flash = {0};
-struct handle_spi flash_spi = {
-  .pin = FLASH_CS_Pin,
-  .port = FLASH_CS_GPIO_Port,
-  .handle = &hspi3,
-};
-
-/// Global Variables
-SemaphoreHandle_t packet_mutex = NULL;
-lfs_file_t packet_file;
-struct packet packet = {0};
-
-/// Task handles
-osThreadId_t sensor_task_handle = NULL;
-const osThreadAttr_t sensor_task_attributes = {
-  .name = "sensor task",
-  .stack_size = 128 * 8,
-  .priority = (osPriority_t) osPriorityHigh,
-};
-osThreadId_t flash_task_handle = NULL;
-const osThreadAttr_t flash_task_attributes = {
-  .name = "flash task",
-  .stack_size = 128 * 8,
-  .priority = (osPriority_t) osPriorityAboveNormal,
-};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -144,68 +79,6 @@ static void MX_TIM5_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
-static inline uint32_t checksum(const uint8_t *data, size_t length)
-{
-  return HAL_CRC_Calculate(&hcrc, (uint32_t *)data, length);
-}
-
-static void SensorTask(void *argument)
-{
-  // Simple counter for task notification 
-  uint32_t counter = 0;
-  // Run this task 200 times per second 
-  TickType_t last_wake_up = xTaskGetTickCount();
-  int hertz = 200;
-
-  for (;;) {
-    if (xSemaphoreTake(packet_mutex, portMAX_DELAY) == pdTRUE) {
-      // Read from all sensors
-      for (int i = 0; i < NUMBER_SENSORS; ++i) {
-        if (sensors_res[i]) {
-          sensors[i].read(sensors[i].ctx, &packet);
-        }
-      }
-
-      // This is originally for camera, but we will use it for flash for now
-      packet.status = (flash_task_handle != NULL);
-      // TODO: change this to microseconds at a later time
-      packet.time_us = xTaskGetTickCount() * portTICK_PERIOD_MS;
-      packet.checksum = checksum((const uint8_t *) &packet + sizeof(short),
-                                 sizeof(packet) - 6);
-      HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-      xSemaphoreGive(packet_mutex);
-
-      // Tell flash to save data every other packet
-      if ((++counter) >= 2 && flash_task_handle != NULL) {
-        counter = 0;
-        xTaskNotifyGive(flash_task_handle); 
-      }
-    }   
-    // Go to sleep little task...
-    vTaskDelayUntil(&last_wake_up, configTICK_RATE_HZ / hertz);
-  }
-}
-
-static void FlashTask(void *argument)
-{
-  struct packet copy = {0};
-
-  for (;;) {
-    // Wait until notified
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-    // Make a local copy, so we don't block
-    if (xSemaphoreTake(packet_mutex, portMAX_DELAY) == pdTRUE) {
-      memcpy(&copy, &packet, sizeof(packet));
-      xSemaphoreGive(packet_mutex);
-    }
-
-    // Save to flash
-    if (save_to_flash) {
-      flash_append(&flash, &packet_file, (uint8_t*) &copy, sizeof(copy));
-    }
-  }
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -221,7 +94,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  // Prevents compiler from stripping this out
+  (void)uxTopUsedPriority;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -248,34 +122,6 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-  packet.magic = 0xBEEF;
-  int init_count = 0;
-  int ready_sensors = 0;
-  while (init_count < 9 && ready_sensors != NUMBER_SENSORS) {
-    if (!sensors_res[BMP581]) {
-      int8_t bmp581_res = bmp581_init(&bmp581, &sensors[BMP581]);
-      sensors_res[BMP581] = (bmp581_res == BMP5_OK);
-      if (sensors_res[BMP581]) {
-        ++ready_sensors;
-      }
-    }
-    if (!sensors_res[BMI088]) {
-      int8_t bmi088_res = bmi088_init(&bmi088, &sensors[BMI088]);
-      sensors_res[BMI088] = (bmi088_res == BMI08_OK);
-      if (sensors_res[BMI088]) {
-        ++ready_sensors;
-      }
-    }
-    HAL_Delay(20000);
-    ++init_count;
-  }
-  bool flash_enabled = gd5f1gq5xe_init(&flash, &flash_spi);
-  int32_t fs_size = flash_mount(&flash);
-  if (fs_size < 0) flash_enabled = false;
-  if (flash_enabled) {
-    uint32_t boot_count = flash_boot_count(&flash, false);
-    uint32_t file_size = flash_open(&flash, &packet_file, "packets");
-  }
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -283,7 +129,6 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
-  packet_mutex = xSemaphoreCreateMutex();
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -301,13 +146,8 @@ int main(void)
   /* Create the thread(s) */
   /* creation of defaultTask */
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
-
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  sensor_task_handle = osThreadNew(SensorTask, NULL, &sensor_task_attributes);
-  if (flash_enabled) {
-    flash_task_handle = osThreadNew(FlashTask, NULL, &flash_task_attributes);
-  }
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -318,22 +158,6 @@ int main(void)
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  /* while (1) */
-  /* { */
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-    /* HAL_GPIO_WritePin(GPIOB, PYRO3_Pin, GPIO_PIN_SET); */
-  /* } */
-
-  /* flash_init(&flash, GD5F1GQ5XE); */
-  /* flash_mount(&flash, &flash_cfg); */
-  /* uint32_t boot_count = flash_boot_count(&flash, false); */
-  /* flash_unmount(&flash); */
-  /* USER CODE END 3 */
 }
 
 /**
@@ -754,6 +578,7 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  device_init(&hspi1, &hspi2, &hspi3, &hcrc);
   /* Infinite loop */
   for(;;)
   {
@@ -782,9 +607,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM5)
   {
-    save_to_flash = false;
-    flash_close(&flash, &packet_file);
-    flash_unmount(&flash);
+    device_disable_flash();
   }
   /* USER CODE END Callback 1 */
 }
