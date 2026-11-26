@@ -1,7 +1,9 @@
 build/
-.vscode
+.vscode/settings.json
 .settings
 .project
 .launch
 .cproject
 .cache
+.vscode/*
+!.vscode/launch.example.json
