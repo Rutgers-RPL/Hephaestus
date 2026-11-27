@@ -6,4 +6,4 @@ build/
 .cproject
 .cache
 .vscode/*
-!.vscode/launch.example.json
+!.vscode/launch.json

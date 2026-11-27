@@ -8,12 +8,10 @@
             "request": "launch",
             "type": "cortex-debug",
             "servertype": "openocd",
-            "device": "STM32F411RETx", 
-            "gdbPath": "gdb-multiarch",
+            "device": "STM32F411RETx",
             "interface": "swd",
             "runToEntryPoint": "main",
             "svdFile": "${workspaceFolder}/STM32F411.svd",
-            "objdumpPath": "arm-none-eabi-objdump",
             "rtos": "FreeRTOS",
             "configFiles": [
                 "interface/stlink.cfg",
